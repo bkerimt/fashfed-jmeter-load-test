@@ -1,0 +1,16 @@
+# JMeter çıktıları (her koşumda yeniden üretilir)
+results/*
+!results/.gitkeep
+reports/*
+!reports/.gitkeep
+*.jtl
+jmeter.log
+
+# Node
+node_modules/
+
+# İşletim sistemi / editör
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
