@@ -29,9 +29,13 @@ fashfed-jmeter-load-test/
 │   ├── server.js
 │   └── package.json
 ├── test-plans/            # JMeter test planları (.jmx)
-│   └── 01-smoke-test.jmx
+│   ├── 01-smoke-test.jmx
+│   └── 02-user-journey.jmx
+├── test-data/             # Test verisi
+│   └── users.csv          # 200 demo kullanıcı
 ├── docs/                  # Her aşamanın öğrenme notları
-│   └── asama-1-jmeter-temelleri.md
+│   ├── asama-1-jmeter-temelleri.md
+│   └── asama-2-kullanici-yolculugu.md
 ├── results/               # Test çıktıları (.jtl) — git'e gönderilmez
 └── reports/               # HTML raporlar — git'e gönderilmez
 ```
@@ -59,25 +63,48 @@ Sunucu kapasite taklidi yapar: eş zamanlı istek `CAPACITY` (varsayılan 50) de
 
 ```bash
 cd mock-server
-npm start
+node server.js
 ```
 
 **2. Testi GUI'de aç (öğrenmek ve düzenlemek için)**
 
-JMeter'ı aç → `File > Open` → `test-plans/01-smoke-test.jmx` → yeşil ▶ butonu.
+JMeter'ı aç → `File > Open` → `test-plans/...jmx` → yeşil ▶ butonu.
 
 **3. Testi komut satırından çalıştır (gerçek yük testleri hep böyle koşulur)**
 
 ```bash
-jmeter -n -t test-plans/01-smoke-test.jmx -l results/smoke.jtl -e -o reports/smoke
+# Smoke test — 1 kullanıcı
+jmeter -n -t test-plans/01-smoke-test.jmx -l results/smoke.jtl -e -o reports/smoke -f
+
+# Kullanıcı yolculuğu — giriş → ürün → sepet → ödeme
+jmeter -n -t test-plans/02-user-journey.jmx -Jusers=20 -Jrampup=10 -Jloops=3 -l results/journey.jtl -e -o reports/journey -f
 ```
 
-Farklı sunucuya yönlendirmek için: `-Jhost=ornek.com -Jport=443 -Jprotocol=https`
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `-Jusers` | 5 | Sanal kullanıcı sayısı |
+| `-Jrampup` | 5 | Kullanıcıların devreye girme süresi (sn) |
+| `-Jloops` | 2 | Her kullanıcının yolculuğu tekrar sayısı |
+| `-JthinkMin` / `-JthinkRange` | 1000 / 2000 | Düşünme süresi: min + rastgele aralık (ms) |
+| `-Jhost` / `-Jport` / `-Jprotocol` | localhost / 8080 / http | Hedef sunucu |
+
+## Kullanıcı Yolculuğu (02)
+
+```
+setUp: mağazayı sıfırla
+01 Ana Sayfa → 02 Kategori → 03 Ürün Detayı → 04 Kampanya → 05 Giriş (token yakala)
+   └─ [Bearer token] 06 Sepete Ekle → 07 Sepeti Gör → 08 Ödeme (sipariş no yakala)
+```
+
+- **CSV Data Set:** her sanal kullanıcı `users.csv`'den farklı bir hesapla giriş yapar
+- **JSON Extractor (korelasyon):** `token`, rastgele `productId` ve `orderId` yanıtlardan yakalanır
+- **Uniform Random Timer:** her adım arasında 1–3 sn düşünme süresi
+- **setUp Thread Group:** her koşumda demo mağaza aynı başlangıç durumuna döner
 
 ## Yol Haritası
 
 - [x] **Aşama 1 —** Proje iskeleti, demo mağaza, smoke test
-- [ ] **Aşama 2 —** Kullanıcı yolculuğu: giriş → ürün → sepet → ödeme (CSV Data Set, JSON Extractor, think time)
+- [x] **Aşama 2 —** Kullanıcı yolculuğu: giriş → ürün → sepet → ödeme (CSV Data Set, JSON Extractor, think time)
 - [ ] **Aşama 3 —** Load test: hedef kullanıcı sayısı, ramp-up, HTML dashboard raporu
 - [ ] **Aşama 4 —** Kampanya senaryosu: spike + stress test, kırılma noktasının bulunması
 - [ ] **Aşama 5 —** GitHub Actions ile otomatik koşum ve rapor
