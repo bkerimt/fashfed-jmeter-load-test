@@ -1,5 +1,7 @@
 # FashFed — JMeter ile E-Ticaret Yük Testi
 
+[![JMeter Performans Testleri](https://github.com/bkerimt/fashfed-jmeter-load-test/actions/workflows/jmeter.yml/badge.svg)](https://github.com/bkerimt/fashfed-jmeter-load-test/actions/workflows/jmeter.yml)
+
 Yoğun trafikli bir moda e-ticaret sitesinde **flaş kampanya başladığı anda sistemin kaç eş zamanlı kullanıcıyı kaldırabildiğini** ölçen Apache JMeter projesi.
 
 > ⚠️ **Önemli:** Testler, bu repodaki **FashFed Demo Store** (sahte API) üzerinde çalışır. Gerçek bir siteye sahibinin yazılı izni olmadan yük testi yapmak hizmet engelleme (DoS) saldırısı sayılır ve yasa dışıdır.
@@ -19,12 +21,17 @@ Kampanya anlarında trafik saniyeler içinde 10–50 katına çıkar. Bu proje �
 |---|---|
 | Apache JMeter 5.6.3 | Test planları ve yük üretimi |
 | Node.js 18+ | Demo mağaza API'si (bağımlılıksız) |
-| GitHub Actions | Testlerin CI'da otomatik çalışması *(Aşama 5)* |
+| GitHub Actions | Her push'ta testlerin otomatik koşumu ve kalite kapısı |
+| Python 3 | Sonuç analizi ve kalite kapısı (`scripts/check_results.py`) |
 
 ## Proje Yapısı
 
 ```
 fashfed-jmeter-load-test/
+├── .github/workflows/
+│   └── jmeter.yml         # CI: her push'ta testleri koşar
+├── scripts/
+│   └── check_results.py   # Kalite kapısı: hata oranı ve p95 eşikleri
 ├── mock-server/           # Test edilen sahte FashFed API'si
 │   ├── server.js
 │   └── package.json
@@ -101,13 +108,27 @@ setUp: mağazayı sıfırla
 - **Uniform Random Timer:** her adım arasında 1–3 sn düşünme süresi
 - **setUp Thread Group:** her koşumda demo mağaza aynı başlangıç durumuna döner
 
+## Sürekli Entegrasyon (GitHub Actions)
+
+`main` dalına her push'ta GitHub'ın bulut makinesinde:
+
+1. Java 21 ve JMeter 5.6.3 kurulur (JMeter önbelleğe alınır)
+2. Demo mağaza başlatılır, `/health` hazır olana kadar beklenir
+3. Smoke test ve 10 kullanıcılı yolculuk testi komut satırından koşulur
+4. `scripts/check_results.py` sonuçları analiz eder — **hata oranı %0'ı veya p95 2000 ms'yi aşarsa** derleme kırmızıya düşer
+5. Özet tablo Actions sayfasında görünür, HTML raporlar **jmeter-raporlari** artifact'i olarak indirilebilir
+
+> JMeter komut satırında assertion başarısız olsa bile başarılı çıkış kodu döner; bu yüzden ayrı bir kalite kapısı scripti gerekir.
+
+Elle başlatmak için: **Actions → JMeter Performans Testleri → Run workflow**
+
 ## Yol Haritası
 
 - [x] **Aşama 1 —** Proje iskeleti, demo mağaza, smoke test
 - [x] **Aşama 2 —** Kullanıcı yolculuğu: giriş → ürün → sepet → ödeme (CSV Data Set, JSON Extractor, think time)
 - [ ] **Aşama 3 —** Load test: hedef kullanıcı sayısı, ramp-up, HTML dashboard raporu
 - [ ] **Aşama 4 —** Kampanya senaryosu: spike + stress test, kırılma noktasının bulunması
-- [ ] **Aşama 5 —** GitHub Actions ile otomatik koşum ve rapor
+- [ ] **Aşama 5 —** GitHub Actions ile otomatik koşum ve rapor *(temel workflow ve kalite kapısı eklendi; yük testleri Aşama 3–4 sonrası eklenecek)*
 - [ ] **Aşama 6 —** Sonuç analizi ve bulgular raporu
 
 ## Yazar

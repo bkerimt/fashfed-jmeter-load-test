@@ -1,0 +1,80 @@
+# GitHub Actions: her push'ta demo mağazayı başlatır ve JMeter testlerini koşar.
+# Sonuç özeti Actions sayfasında tablo olarak görünür, HTML raporlar indirilebilir.
+
+name: JMeter Performans Testleri
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # Actions sekmesinden "Run workflow" ile elle başlatmak için
+
+env:
+  JMETER_VERSION: "5.6.3"
+
+jobs:
+  jmeter:
+    name: Smoke + Kullanıcı Yolculuğu
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Java 21 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Node.js kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JMeter önbelleği
+        id: cache-jmeter
+        uses: actions/cache@v4
+        with:
+          path: apache-jmeter-${{ env.JMETER_VERSION }}
+          key: jmeter-${{ env.JMETER_VERSION }}
+
+      - name: JMeter indir
+        if: steps.cache-jmeter.outputs.cache-hit != 'true'
+        run: curl -sSfL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" | tar xz
+
+      - name: JMeter'ı PATH'e ekle
+        run: |
+          echo "$PWD/apache-jmeter-${JMETER_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Demo mağazayı başlat
+        run: |
+          nohup node mock-server/server.js > mock-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health; then echo; echo "Demo mağaza hazır"; exit 0; fi
+            sleep 1
+          done
+          echo "Demo mağaza 30 saniyede başlamadı"; cat mock-server.log; exit 1
+
+      - name: Smoke test
+        run: jmeter -n -t test-plans/01-smoke-test.jmx -l results/smoke.jtl -e -o reports/smoke -f
+
+      - name: Kullanıcı yolculuğu testi (10 kullanıcı)
+        run: >
+          jmeter -n -t test-plans/02-user-journey.jmx
+          -Jusers=10 -Jrampup=5 -Jloops=2 -JthinkMin=200 -JthinkRange=300
+          -l results/journey.jtl -e -o reports/journey -f
+
+      - name: Sonuçları kontrol et
+        run: python3 scripts/check_results.py results/smoke.jtl results/journey.jtl
+
+      - name: Raporları yükle
+        if: always() # test başarısız olsa da raporu görmek isteriz
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-raporlari
+          path: |
+            reports/
+            results/
+            mock-server.log
